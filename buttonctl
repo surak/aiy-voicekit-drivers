@@ -3,7 +3,11 @@
 
 import argparse
 import json
+import math
 import os
+import shutil
+import struct
+import subprocess
 import sys
 import time
 
@@ -37,6 +41,11 @@ def parse_args() -> argparse.Namespace:
         "--json",
         action="store_true",
         help="Emit JSON lines instead of plain text.",
+    )
+    parser.add_argument(
+        "--mute",
+        action="store_true",
+        help="Disable quiet click tones on button events.",
     )
     return parser.parse_args()
 
@@ -126,6 +135,51 @@ def permission_hint(err: Exception) -> bool:
     return True
 
 
+def tone_bytes(freq_hz: float, duration_s: float, volume: float, rate: int) -> bytes:
+    total = max(1, int(duration_s * rate))
+    amp = int(max(0.0, min(1.0, volume)) * 32767)
+    out = bytearray(total * 2)
+    for i in range(total):
+        sample = int(amp * math.sin(2.0 * math.pi * freq_hz * i / rate))
+        struct.pack_into("<h", out, i * 2, sample)
+    return bytes(out)
+
+
+class EventSound:
+    def __init__(self, enabled: bool) -> None:
+        self._rate = 16000
+        self._enabled = enabled and shutil.which("aplay") is not None
+        self._press = tone_bytes(freq_hz=1200, duration_s=0.025, volume=0.02, rate=self._rate)
+        self._release = tone_bytes(freq_hz=900, duration_s=0.02, volume=0.015, rate=self._rate)
+
+    def play(self, event: str) -> None:
+        if not self._enabled:
+            return
+        data = self._press if event == "pressed" else self._release
+        try:
+            subprocess.run(
+                [
+                    "aplay",
+                    "-q",
+                    "-t",
+                    "raw",
+                    "-f",
+                    "S16_LE",
+                    "-r",
+                    str(self._rate),
+                    "-c",
+                    "1",
+                ],
+                input=data,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=0.8,
+            )
+        except Exception:
+            self._enabled = False
+
+
 def main() -> int:
     args = parse_args()
 
@@ -139,6 +193,7 @@ def main() -> int:
 
     emitted = 0
     start = time.monotonic()
+    sound = EventSound(enabled=not args.mute)
 
     try:
         with Board() as board:
@@ -156,6 +211,7 @@ def main() -> int:
                     if not board.button.wait_for_press(timeout=timeout):
                         break
                     board.led.state = Led.ON
+                    sound.play("pressed")
 
                     if args.edge in ("both", "press"):
                         emit("pressed", args.json)
@@ -170,6 +226,7 @@ def main() -> int:
                     if not board.button.wait_for_release(timeout=timeout):
                         break
                     board.led.state = Led.OFF
+                    sound.play("released")
 
                     if args.edge in ("both", "release"):
                         emit("released", args.json)
