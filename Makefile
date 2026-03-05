@@ -38,6 +38,6 @@ install: modules
 
 help:
 	@echo "Targets:"
-	@echo "  make / make build  Build all modules"
-	@echo "  make clean         Clean all module artifacts"
+	@echo "  make / make build  Build all legacy V2 modules"
+	@echo "  make clean         Clean all legacy V2 module artifacts"
 	@echo "  sudo make install  Install modules into /lib/modules/\$$KVER/extra"

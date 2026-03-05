@@ -1,9 +1,7 @@
-# What is this?
+# AIY sound module notes
 
-This is the Linux kernel driver for the Google AIY Voice Kit v2 voice bonnet.
+This directory contains out-of-tree ALSA drivers for the **Google AIY Voice Bonnet v2**.
 
-Note: the rt6231 and rl5645 codec drivers were copied from the Linux source tree
-because the symbols needed in the snd-aiy-voicebonnet driver are not available
-in DKMS builds.
+If your board is **Voice HAT v1** (`Google AIY audioHAT Board v1`), do not use these modules. Use the in-kernel `googlevoicehat-soundcard` overlay instead.
 
-These files are identical to the ones in the kernel tree at sound/soc/codecs/
+`rt5645` and `rl6231` were copied from the Linux kernel codec tree because the symbols needed by `snd-aiy-voicebonnet` are not exported for simple DKMS-style builds.
