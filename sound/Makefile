@@ -2,8 +2,8 @@ obj-m := snd-aiy-voicebonnet.o rt5645.o rl6231.o
 KVERSION := $(shell uname -r)
 
 all:
-	$(MAKE) -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
+	$(MAKE) -C /lib/modules/$(KVERSION)/build M=$(CURDIR) modules
 
 clean:
-	$(MAKE) -C /lib/modules/$(KVERSION)/build M=$(PWD) clean
+	$(MAKE) -C /lib/modules/$(KVERSION)/build M=$(CURDIR) clean
 
