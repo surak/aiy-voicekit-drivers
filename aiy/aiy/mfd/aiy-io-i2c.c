@@ -87,7 +87,7 @@ static int aiy_io_mcu_write_direct(struct i2c_client *i2c, u16 addr,
 		.len   = size,
 		.buf   = (u8 *) buf,
 	};
-	return i2c_transfer(i2c->adapter, &msg, 1);
+	return __i2c_transfer(i2c->adapter, &msg, 1);
 }
 
 static int aiy_io_mcu_wait_alive(struct i2c_client *i2c)
@@ -362,6 +362,10 @@ static int aiy_io_i2c_probe(struct i2c_client *i2c)
 	}
 
 	i2c_set_clientdata(i2c, aiy);
+
+	err = aiy_io_reset(i2c);
+	if (err < 0)
+		dev_warn(dev, "MCU reset at probe failed: %d\n", err);
 
 	/* devm_device_add_group() による sysfs ノード登録 */
 	err = devm_device_add_group(dev, &aiy_io_attr_group);

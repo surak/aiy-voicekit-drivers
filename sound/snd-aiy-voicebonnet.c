@@ -39,7 +39,7 @@
  static int snd_rpi_aiy_voicebonnet_init(struct snd_soc_pcm_runtime *rtd)
  {
 	 int ret;
-	 struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	 struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
  
 	 /* 適切な ASRC クロックソースの選択 */
 	 rt5645_sel_asrc_clk_src(codec_dai->component,
@@ -86,7 +86,7 @@
  {
 	 int ret = 0;
 	 struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	 struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	 struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
 	 unsigned int freq = params_rate(params) * 512;
  
 	 printk(KERN_EMERG "snd_rpi_aiy_voicebonnet_hw_params: start\n");
