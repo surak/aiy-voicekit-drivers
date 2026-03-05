@@ -150,7 +150,7 @@ After changing groups, start a new login session (or run `newgrp gpio`).
 
 The AIY Python API already supports button events (`Board().button.wait_for_press()` / `wait_for_release()`).
 
-This repo now includes a CLI helper:
+This repo now includes a CLI helper. While running, it mirrors button state to the button LED (ON when pressed, OFF when released):
 
 ```bash
 ./buttonctl                    # stream press/release events

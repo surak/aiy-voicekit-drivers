@@ -2,8 +2,12 @@
 """Simple LED control for AIY Voice HAT v1 button LED."""
 
 import argparse
+import os
 import sys
 import time
+
+
+REPO_SPEC = "git+https://github.com/google/aiyprojects-raspbian.git@aiyprojects"
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +39,58 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def install_hint() -> str:
+    if os.geteuid() == 0:
+        return (
+            "sudo python3 -m pip install --no-deps --break-system-packages "
+            f"{REPO_SPEC}"
+        )
+    return (
+        "python3 -m pip install --user --no-deps --break-system-packages "
+        f"{REPO_SPEC}"
+    )
+
+
+def maybe_add_sudo_user_site() -> None:
+    if os.geteuid() != 0:
+        return
+    sudo_user = os.environ.get("SUDO_USER")
+    if not sudo_user:
+        return
+    pyver = f"{sys.version_info.major}.{sys.version_info.minor}"
+    site = f"/home/{sudo_user}/.local/lib/python{pyver}/site-packages"
+    if os.path.isdir(site) and site not in sys.path:
+        sys.path.insert(0, site)
+
+
+def import_aiy():
+    maybe_add_sudo_user_site()
+    try:
+        from aiy.board import Board, Led
+        return Board, Led
+    except ImportError:
+        print(
+            "Missing dependency: aiy.board\n"
+            "Install with:\n"
+            f"  {install_hint()}",
+            file=sys.stderr,
+        )
+        return None, None
+
+
+def permission_hint(err: Exception) -> bool:
+    msg = str(err)
+    if "No access to /dev/mem" not in msg:
+        return False
+    print(
+        "GPIO permission denied.\n"
+        "If you just added your user to the gpio group, start a new login session\n"
+        "(or run: newgrp gpio).",
+        file=sys.stderr,
+    )
+    return True
+
+
 def main() -> int:
     args = parse_args()
 
@@ -42,16 +98,8 @@ def main() -> int:
         print("brightness must be between 0.0 and 1.0", file=sys.stderr)
         return 2
 
-    try:
-        from aiy.board import Board, Led
-    except ImportError:
-        print(
-            "Missing dependency: aiy.board\n"
-            "Install with:\n"
-            "  python3 -m pip install --user --no-deps --break-system-packages "
-            "git+https://github.com/google/aiyprojects-raspbian.git@aiyprojects",
-            file=sys.stderr,
-        )
+    Board, Led = import_aiy()
+    if Board is None:
         return 2
 
     states = {
@@ -61,24 +109,29 @@ def main() -> int:
         "pulse": Led.PULSE_SLOW,
     }
 
-    with Board() as board:
-        board.led.brightness = args.brightness
-        board.led.state = states[args.action]
+    try:
+        with Board() as board:
+            board.led.brightness = args.brightness
+            board.led.state = states[args.action]
 
-        if args.action != "off":
-            try:
-                if args.duration is None:
-                    print("Running. Press Ctrl-C to stop.")
-                    while True:
-                        time.sleep(60)
-                elif args.duration > 0:
-                    time.sleep(args.duration)
-            except KeyboardInterrupt:
-                pass
-            finally:
-                if not args.leave_on_exit:
-                    board.led.state = Led.OFF
-                    time.sleep(0.05)
+            if args.action != "off":
+                try:
+                    if args.duration is None:
+                        print("Running. Press Ctrl-C to stop.")
+                        while True:
+                            time.sleep(60)
+                    elif args.duration > 0:
+                        time.sleep(args.duration)
+                except KeyboardInterrupt:
+                    pass
+                finally:
+                    if not args.leave_on_exit:
+                        board.led.state = Led.OFF
+                        time.sleep(0.05)
+    except RuntimeError as err:
+        if permission_hint(err):
+            return 3
+        raise
 
     return 0
 

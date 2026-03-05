@@ -3,8 +3,12 @@
 
 import argparse
 import json
+import os
 import sys
 import time
+
+
+REPO_SPEC = "git+https://github.com/google/aiyprojects-raspbian.git@aiyprojects"
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +39,45 @@ def parse_args() -> argparse.Namespace:
         help="Emit JSON lines instead of plain text.",
     )
     return parser.parse_args()
+
+
+def install_hint() -> str:
+    if os.geteuid() == 0:
+        return (
+            "sudo python3 -m pip install --no-deps --break-system-packages "
+            f"{REPO_SPEC}"
+        )
+    return (
+        "python3 -m pip install --user --no-deps --break-system-packages "
+        f"{REPO_SPEC}"
+    )
+
+
+def maybe_add_sudo_user_site() -> None:
+    if os.geteuid() != 0:
+        return
+    sudo_user = os.environ.get("SUDO_USER")
+    if not sudo_user:
+        return
+    pyver = f"{sys.version_info.major}.{sys.version_info.minor}"
+    site = f"/home/{sudo_user}/.local/lib/python{pyver}/site-packages"
+    if os.path.isdir(site) and site not in sys.path:
+        sys.path.insert(0, site)
+
+
+def import_board():
+    maybe_add_sudo_user_site()
+    try:
+        from aiy.board import Board, Led
+        return Board, Led
+    except ImportError:
+        print(
+            "Missing dependency: aiy.board\n"
+            "Install with:\n"
+            f"  {install_hint()}",
+            file=sys.stderr,
+        )
+        return None, None
 
 
 def fmt_iso(ts: float) -> str:
@@ -70,6 +113,19 @@ def remaining_time(start: float, timeout: float | None) -> float | None:
     return left
 
 
+def permission_hint(err: Exception) -> bool:
+    msg = str(err)
+    if "No access to /dev/mem" not in msg:
+        return False
+    print(
+        "GPIO permission denied.\n"
+        "If you just added your user to the gpio group, start a new login session\n"
+        "(or run: newgrp gpio).",
+        file=sys.stderr,
+    )
+    return True
+
+
 def main() -> int:
     args = parse_args()
 
@@ -77,46 +133,54 @@ def main() -> int:
         print("count must be >= 0", file=sys.stderr)
         return 2
 
-    try:
-        from aiy.board import Board
-    except ImportError:
-        print(
-            "Missing dependency: aiy.board\n"
-            "Install with:\n"
-            "  python3 -m pip install --user --no-deps --break-system-packages "
-            "git+https://github.com/google/aiyprojects-raspbian.git@aiyprojects",
-            file=sys.stderr,
-        )
+    Board, Led = import_board()
+    if Board is None:
         return 2
 
     emitted = 0
     start = time.monotonic()
 
-    with Board() as board:
-        while True:
-            if args.count and emitted >= args.count:
-                break
+    try:
+        with Board() as board:
+            try:
+                board.led.state = Led.OFF
 
-            timeout = remaining_time(start, args.timeout)
-            if timeout is not None and timeout <= 0:
-                break
+                while True:
+                    if args.count and emitted >= args.count:
+                        break
 
-            if args.edge in ("both", "press"):
-                if not board.button.wait_for_press(timeout=timeout):
-                    break
-                emit("pressed", args.json)
-                emitted += 1
-                if args.count and emitted >= args.count:
-                    break
-                timeout = remaining_time(start, args.timeout)
-                if timeout is not None and timeout <= 0:
-                    break
+                    timeout = remaining_time(start, args.timeout)
+                    if timeout is not None and timeout <= 0:
+                        break
 
-            if args.edge in ("both", "release"):
-                if not board.button.wait_for_release(timeout=timeout):
-                    break
-                emit("released", args.json)
-                emitted += 1
+                    if not board.button.wait_for_press(timeout=timeout):
+                        break
+                    board.led.state = Led.ON
+
+                    if args.edge in ("both", "press"):
+                        emit("pressed", args.json)
+                        emitted += 1
+                        if args.count and emitted >= args.count:
+                            break
+
+                    timeout = remaining_time(start, args.timeout)
+                    if timeout is not None and timeout <= 0:
+                        break
+
+                    if not board.button.wait_for_release(timeout=timeout):
+                        break
+                    board.led.state = Led.OFF
+
+                    if args.edge in ("both", "release"):
+                        emit("released", args.json)
+                        emitted += 1
+            finally:
+                board.led.state = Led.OFF
+                time.sleep(0.05)
+    except RuntimeError as err:
+        if permission_hint(err):
+            return 3
+        raise
 
     return 0
 
