@@ -145,3 +145,25 @@ python3 -m pip install --user --no-deps --break-system-packages \
 ```
 
 After changing groups, start a new login session (or run `newgrp gpio`).
+
+## Button Events (`buttonctl`)
+
+The AIY Python API already supports button events (`Board().button.wait_for_press()` / `wait_for_release()`).
+
+This repo now includes a CLI helper:
+
+```bash
+./buttonctl                    # stream press/release events
+./buttonctl --json             # JSON-lines output
+./buttonctl --edge press       # only press events
+./buttonctl --edge release     # only release events
+./buttonctl --count 4          # stop after 4 events
+./buttonctl --timeout 30       # stop after 30 seconds
+```
+
+Example output:
+
+```text
+2026-03-05T13:40:12.123 pressed
+2026-03-05T13:40:12.517 released
+```
