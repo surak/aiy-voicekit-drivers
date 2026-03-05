@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Simple LED control for AIY Voice HAT v1 button LED."""
+
+import argparse
+import sys
+import time
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Control AIY Voice HAT v1 button LED (on/off/blink/pulse)."
+    )
+    parser.add_argument(
+        "action",
+        choices=["on", "off", "blink", "pulse"],
+        help="LED action to run.",
+    )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=None,
+        help="Seconds to run for. If omitted, runs until Ctrl-C (except off).",
+    )
+    parser.add_argument(
+        "--brightness",
+        type=float,
+        default=1.0,
+        help="Brightness from 0.0 to 1.0 (default: 1.0).",
+    )
+    parser.add_argument(
+        "--leave-on-exit",
+        action="store_true",
+        help="Do not force OFF when the command exits.",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+
+    if args.brightness < 0.0 or args.brightness > 1.0:
+        print("brightness must be between 0.0 and 1.0", file=sys.stderr)
+        return 2
+
+    try:
+        from aiy.board import Board, Led
+    except ImportError:
+        print(
+            "Missing dependency: aiy.board\n"
+            "Install with:\n"
+            "  python3 -m pip install --user --no-deps --break-system-packages "
+            "git+https://github.com/google/aiyprojects-raspbian.git@aiyprojects",
+            file=sys.stderr,
+        )
+        return 2
+
+    states = {
+        "on": Led.ON,
+        "off": Led.OFF,
+        "blink": Led.BLINK,
+        "pulse": Led.PULSE_SLOW,
+    }
+
+    with Board() as board:
+        board.led.brightness = args.brightness
+        board.led.state = states[args.action]
+
+        if args.action != "off":
+            try:
+                if args.duration is None:
+                    print("Running. Press Ctrl-C to stop.")
+                    while True:
+                        time.sleep(60)
+                elif args.duration > 0:
+                    time.sleep(args.duration)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                if not args.leave_on_exit:
+                    board.led.state = Led.OFF
+                    time.sleep(0.05)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

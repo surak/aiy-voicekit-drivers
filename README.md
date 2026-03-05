@@ -122,3 +122,26 @@ sudo make install
 ## License
 
 GPL v2 (see `LICENSE`).
+
+## LED Helper (`ledctl`)
+
+For Voice HAT v1 button LED control, this repo includes a helper script:
+
+```bash
+./ledctl on --duration 5
+./ledctl blink --duration 10
+./ledctl pulse --duration 10
+./ledctl off
+```
+
+By default (without `--duration`) it runs until `Ctrl-C`.
+
+Prerequisites:
+
+```bash
+sudo usermod -aG gpio $USER
+python3 -m pip install --user --no-deps --break-system-packages \
+  git+https://github.com/google/aiyprojects-raspbian.git@aiyprojects
+```
+
+After changing groups, start a new login session (or run `newgrp gpio`).
